@@ -20,6 +20,15 @@ public class NetworkData {
 		Lanes=0;
 	}
 	
+	/**
+	 * Network Data Quick-add method
+	 * @param a The link's A-node value
+	 * @param b The link's B-node value
+	 * @param admclass The link's facility type code
+	 * @param speed The link's speed
+	 * @param areatype The link's area type
+	 * @param lanes The link's number of lanes
+	 */
 	NetworkData(int a, int b, int admclass, double speed, int areatype, int lanes){
 		A=a;
 		B=b;

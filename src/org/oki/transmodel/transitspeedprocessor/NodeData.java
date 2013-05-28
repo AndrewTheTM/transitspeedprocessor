@@ -13,6 +13,13 @@ public class NodeData {
 		X=0.0;
 		Y=0.0;
 	}
+	
+	/**
+	 * NodeData Quick-add method
+	 * @param n The node number
+	 * @param x The node's x coordinate
+	 * @param y The node's y coordinate
+	 */
 	NodeData(int n, double x, double y){
 		N=n;
 		X=x;
