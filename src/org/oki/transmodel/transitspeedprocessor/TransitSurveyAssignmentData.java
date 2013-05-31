@@ -1,12 +1,10 @@
 package org.oki.transmodel.transitspeedprocessor;
 
-//TODO Document
 /**
+ * Class for transit survey assignment data (assignment ID, trip taken)
  * @author arohne
- * Class to hold assignment data
  */
 public class TransitSurveyAssignmentData {
-	//TODO: Write transit survey assignment data structure
 	int assignmentID;
 	int tripOrder;
 	String route;

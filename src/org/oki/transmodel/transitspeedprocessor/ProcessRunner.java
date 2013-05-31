@@ -1,10 +1,14 @@
 package org.oki.transmodel.transitspeedprocessor;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Properties;
 
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
@@ -12,10 +16,11 @@ import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import com.hexiong.jdbf.DBFWriter;
+import com.hexiong.jdbf.JDBFException;
+import com.hexiong.jdbf.JDBField;
 import com.linuxense.javadbf.DBFException;
 import com.linuxense.javadbf.DBFField;
 import com.linuxense.javadbf.DBFReader;
@@ -32,8 +37,11 @@ public class ProcessRunner {
 		config.load(ProcessRunner.class.getClassLoader().getResourceAsStream("TransitSpeedProcessor.properties"));
 		
 		ArrayList<TransitGPSData> transitGPS=new ArrayList<TransitGPSData>();
+		ArrayList<TransitGPSData> transitGPSClean=new ArrayList<TransitGPSData>();
 		ArrayList<NodeData> nodeData=new ArrayList<NodeData>();
 		ArrayList<NetworkData> NetData=new ArrayList<NetworkData>();
+		ArrayList<TransitSurveyAssignmentData> surveyAssignments = new ArrayList<TransitSurveyAssignmentData>();
+		ArrayList<TransitAssignmentLinks> surveyAssignLinks = new ArrayList<TransitAssignmentLinks>();
 		
 		try{
 			//Read GPS Input Points
@@ -63,37 +71,127 @@ public class ProcessRunner {
 			tempNetData=null;
 			netInputFieldMap=null;
 		}catch (FileNotFoundException e){
-			//TODO: Explain that the file was not found and to check paths, double-backslashes, etc.
+			System.out.println("FILE NOT FOUND");
+			System.out.println(e.getLocalizedMessage());
 			e.printStackTrace();
 		}catch (DBFException e){
-			//TODO: Explain that there was an unspecified DBF error and to check the DBF file.
+			System.out.println("UNSPECIFIED DBF ERROR");
 			e.printStackTrace();
 		}catch (Exception e){
-			//TODO: Explain that there was an error.  We don't know what it is, but the stack trace may help.
+			System.out.println("ERROR!");
 			e.printStackTrace();
 		}
 		
-		//TODO: Load assignments here
 		try{
-			String[] RideCountDataMap={"assignment","route","direction","tod"};
+			String[] RideCountDataMap={"assignment","triporder","route","direction","tod"};
 			ArrayList<Object[]> tempRideCountList=new ArrayList<Object[]>();
 			tempRideCountList=readExcel(config.getProperty("AssignmentTable"),"assignments",RideCountDataMap);
-			//TODO: fill into AL object and kill temp object.  Then...
-			//FIXME: Load GPS File List
+			for(Object o[]:tempRideCountList)
+				surveyAssignments.add(new TransitSurveyAssignmentData((int)Double.parseDouble((String) o[0]),(int)Double.parseDouble((String) o[1]),(String) o[2],(String) o[3],(String) o[4]));		
+			tempRideCountList=null;
+			RideCountDataMap=null;
+			
+			String[] TripLinkDataMap={"fileid","filename"};
+			ArrayList<Object[]> tempTripLink=new ArrayList<Object[]>();
+			tempTripLink=readExcel(config.getProperty("GPSLinkTable"),"gpsfiles",TripLinkDataMap);
+			for(Object o[]:tempTripLink)
+				surveyAssignLinks.add(new TransitAssignmentLinks((int)Double.parseDouble((String)o[0]),(String)o[1]));
+			tempTripLink=null;
+			TripLinkDataMap=null;
+			
 		}catch (InvalidFormatException e){
-			//TODO: Tell the user that the format is illegal and the FBI is on their way to bust their ass!
-			System.out.println("The format is illegal. The FBI is on the way.  Your ass is grass!");
+			System.out.println("THE FORMAT IS ILLEGAL. The FBI is on the way.  Your ass is grass!");
 			e.printStackTrace();
 		}catch(FileNotFoundException e){
-			//TODO: Tell the user that the file was not found
-			System.out.println("File not found");
+			System.out.println("FILE NOT FOUND");
 			e.printStackTrace();
 		}catch(IOException e){
-			//TODO: Something here
-			System.out.println("IOException");
+			System.out.println("IOEXCEPTION");
+			e.printStackTrace();
+		}catch(Exception e){
+			System.out.println("ERROR");
+			e.printStackTrace();
+		}
+		System.out.println("Completed reading files");
+		
+		Date timeNow=new Date();
+		System.out.println("Starting DistToN at "+timeNow.toString());
+		//Distance to N
+		/*
+		 * Single-core performance - 14sec for 10,000 items
+		 */
+		
+		//FIXME: Error below - can't do this to non-static objects
+		DistToN.nodeData=nodeData;
+		DistToN.transitGPS=transitGPS;
+		
+		new DistToN().run();
+		//nodeData=DistToN.nodeData;
+		//transitGPS=DistToN.transitGPS;
+		//FIXME: This is running really quick (not that I'm that shocked), but it isn't updating the source object.
+		/*
+		for(TransitGPSData tgps:transitGPS){
+			
+			if(transitGPS.indexOf(tgps) % 1000 == 0)
+				System.out.println("Distance to N, Working on "+transitGPS.indexOf(tgps)+" of "+transitGPS.size());
+			for(NodeData nd:nodeData){
+				if(nd.N==tgps.N && !nd.equals(tgps)){
+					tgps.DistToN=Math.sqrt(Math.pow((nd.X-tgps.X),2)+Math.pow((nd.Y-tgps.Y),2));
+				}
+			}
+			
+		}
+		 */
+		timeNow=new Date();
+		System.out.println("Finishing DistToN at "+timeNow.toString());
+		// Nearest N
+		
+		timeNow=new Date();
+		System.out.println("Starting big thing at "+timeNow.toString());
+		
+		NearestN.transitGPS=transitGPS;
+		
+		new NearestN().run();
+		/*
+		for(TransitGPSData tgps:transitGPS){
+			
+			new NearestN().run();
+			//FIXME: This is double looping!
+			
+			
+		}*/
+		
+		
+		
+		timeNow=new Date();
+		System.out.println("Completed Nearest-N operation at "+timeNow.toString());
+		// End Nearest N
+		
+		
+		
+		
+		
+		//Output these to DBF for debugging
+		try {
+			writeDBF("C:\\Modelrun\\TransitTripLengths\\debug.dbf",transitGPS);
+		} catch (IllegalArgumentException | IllegalAccessException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JDBFException e) {
+			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
+		
+		
+		//TODO: Point on *which* route? Agency Codes?  Crosstowns?
+		
+		
+
+		
+
+		
+		//FIXME: Remove when debugging is complete (this is the last holding step)
 		int a=1;
 		System.out.println(a);
 	}
@@ -108,6 +206,8 @@ public class ProcessRunner {
 	 * @throws DBFException if there is a different problem with the DBF
 	 */
 	static ArrayList<Object[]> readDBF(String DBFFileName, String[] inputFieldMap) throws FileNotFoundException, DBFException{
+		//TODO: Remove the javadbf library and move to jdbf (which actually works for writing)
+		//      This works fine for reading; removing it is for the sake of simplicity and organization
 		InputStream iStream = new FileInputStream(DBFFileName);
 		DBFReader reader=new DBFReader(iStream);
 		int numberOfFields=reader.getFieldCount();
@@ -118,7 +218,7 @@ public class ProcessRunner {
 		while((row=reader.nextRecord())!=null){
 			rowCount++;
 			if((rowCount % 100)==0 || rowCount==1)
-				System.out.println("Working on row "+rowCount);
+				System.out.println("Reading DBF row "+rowCount);
 			Object[] newObject = new Object[inputFieldMap.length];
 			for(int f=0;f<numberOfFields;f++){
 				DBFField field=reader.getField(f);
@@ -127,22 +227,31 @@ public class ProcessRunner {
 						newObject[ff]=row[f];
 					}
 			}
-			if(rowCount==1000) //FIXME: remove this when debugging is done
-				break;
 			outObj.add(newObject);
-			
+			if(rowCount==10000) //FIXME: For debugging only
+				break;
 		}
 		return outObj;
 	}
 	
+	/**
+	 * Reads and Excel file (assuming the first row is a header row) and puts all the data into an arraylist of object arrays.
+	 * @param ExcelFileName The Excel file to read.  Wants an XLSX file.
+	 * @param SheetName The Excel sheetname to read.  If empty or null, uses sheet 0.
+	 * @param inputFieldMap A map of fields to look for
+	 * @return An arraylist of object arrays with the data
+	 * @throws InvalidFormatException
+	 * @throws FileNotFoundException
+	 * @throws IOException
+	 */
 	static ArrayList<Object[]> readExcel(String ExcelFileName, String SheetName, String[]inputFieldMap) throws InvalidFormatException, FileNotFoundException, IOException{
-		//TODO: Documentation
-
-		
 		OPCPackage pkg=OPCPackage.open(new FileInputStream(ExcelFileName));
-		XSSFWorkbook wb=new XSSFWorkbook(pkg);
-		
-		Sheet sheet=wb.getSheet(SheetName);
+		XSSFWorkbook wb=new XSSFWorkbook(pkg);		
+		Sheet sheet;
+		if(SheetName.equals("") || SheetName==null)
+			sheet=wb.getSheetAt(0);
+		else
+			sheet=wb.getSheet(SheetName);
 		//Header Row
 		int[] cols=new int[inputFieldMap.length];
 		int ifmCol=0;
@@ -152,25 +261,106 @@ public class ProcessRunner {
 				if(c.toString().toLowerCase().equalsIgnoreCase(inputFieldMap[x])){
 					cols[ifmCol]=c.getColumnIndex();
 					ifmCol++;
-					break; //should just break out of this loop
+					break;
 				}
 			}
 		}
-		
 		
 		ArrayList<Object[]> outAL=new ArrayList<Object[]>();
 		
 		for(Row row:sheet){
 			Object[] out=new Object[inputFieldMap.length];
 			if(row.getRowNum()>0){
+				if(row.getRowNum()%1000==0)
+					System.out.println("Reading Excel file, row "+row.getRowNum());
+				boolean addMe=false;
 				for(int x=0;x<cols.length;x++){
-					out[x]=row.getCell(cols[x]).toString(); //TODO: Convert from cell to values
+					if(row.getCell(cols[x])!=null){
+						out[x]=row.getCell(cols[x]).toString();
+						addMe=true;
+					}
 				}
-				outAL.add(out);
+				if(addMe)
+					outAL.add(out);
 			}
-			
 		}
 		return outAL;
+	}	
+
+	//TODO: Document
+	static void writeDBF(String DBFFileName, ArrayList<?> objectToWrite) throws IllegalArgumentException, IllegalAccessException, IOException, JDBFException{
+		Object o=objectToWrite.get(0);
+		Class c=o.getClass();
+		Field[] cdf=c.getDeclaredFields();
+		JDBField[] jdbFields=new JDBField[cdf.length];
+		int fldCount=0;
+		String fieldDefs[]=new String[cdf.length];
+		for(Field f:cdf){
+			switch(f.getType().toString()){
+			case "int":
+				jdbFields[fldCount]=new JDBField(f.getName().substring(0, Math.min(10,f.getName().length())),'N',20,0);
+				fieldDefs[fldCount]="N";
+				break;
+			case "double":
+				jdbFields[fldCount]=new JDBField(f.getName().substring(0, Math.min(10,f.getName().length())),'F',20,8);
+				fieldDefs[fldCount]="F";
+				break;
+			case "java.lang.String":
+				jdbFields[fldCount]=new JDBField(f.getName().substring(0, Math.min(10,f.getName().length())),'C',32,0);
+				fieldDefs[fldCount]="C";
+				break;
+			case "java.util.Date":
+				jdbFields[fldCount]=new JDBField(f.getName().substring(0, Math.min(10,f.getName().length())),'D',8,0);
+				fieldDefs[fldCount]="D";
+				break;
+			case "boolean":
+				jdbFields[fldCount]=new JDBField(f.getName().substring(0, Math.min(10,f.getName().length())),'C',6,0);
+				fieldDefs[fldCount]="C";
+				break;
+			default:
+				jdbFields[fldCount]=new JDBField(f.getName().substring(0, Math.min(10,f.getName().length())),'C',32,0);
+				fieldDefs[fldCount]="C";
+			break;
+			}
+			fldCount++;
+		}
+		
+		DBFWriter writer=new DBFWriter(DBFFileName,jdbFields);
+
+		for(Object o2:objectToWrite){
+			Object[] rowData=new Object[fldCount];
+			Class c2=o2.getClass();
+			Field[] fwa=c2.getDeclaredFields();
+			int fldCnt=0;
+			 //C, D, F, N
+			for(Field fw:fwa){
+				if(fw.get(o2)!=null){
+					switch(fieldDefs[fldCnt]){
+						case("C"):
+							rowData[fldCnt]=fw.get(o2).toString();
+							break;
+						case("D"):
+							rowData[fldCnt]=fw.get(o2);
+							break;
+						case("L"):
+							rowData[fldCnt]=fw.get(o2);
+							break;
+						case("N"):
+							rowData[fldCnt]=Double.parseDouble(fw.get(o2).toString());
+							break;
+						case("F"):
+							rowData[fldCnt]=Double.parseDouble(fw.get(o2).toString());
+							break;
+						default:
+							rowData[fldCnt]=fw.get(o2);
+							break;
+					}
+				}else
+					rowData[fldCnt]="";
+				fldCnt++;
+			}
+			writer.addRecord(rowData);		
+		}
+		writer.close();
 	}
-	
 }

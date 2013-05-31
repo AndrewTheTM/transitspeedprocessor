@@ -19,6 +19,7 @@ public class TransitGPSData {
 	int Mode;
 	String AgencyCode;
 	boolean Crosstown;
+	boolean removeMe;
 	TransitGPSData(){
 		FileID=0;
 		//SurveyDate.set(2001,1,1);
@@ -31,6 +32,7 @@ public class TransitGPSData {
 		DistToN=0.0;
 		Mode=0;
 		Crosstown=false;
+		removeMe=false;
 	}
 	/**
 	 * Quick-add method for transit GPS data
@@ -52,5 +54,6 @@ public class TransitGPSData {
 		N=n;
 		TimeSeconds=timesec;
 		SurveyDate=(Date) surveydate;
+		removeMe=false;
 	}
 }
