@@ -1,0 +1,6 @@
+bin
+gen
+third-party
+.settings
+.classpath
+.project

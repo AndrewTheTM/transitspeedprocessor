@@ -4,8 +4,13 @@ import java.util.ArrayList;
 import java.util.concurrent.Callable;
 
 public class DistToNProcess implements Callable {
-	public TransitGPSData tgps;
-	public ArrayList<NodeData> nodeData;
+	private TransitGPSData tgps;
+	private ArrayList<NodeData> nodeData;
+	
+	DistToNProcess(TransitGPSData t, ArrayList<NodeData> n){
+		this.tgps=t;
+		this.nodeData=n;
+	}
 	
 	@Override
 	public Object call() throws Exception {

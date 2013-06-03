@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.Properties;
 
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
@@ -39,10 +40,14 @@ public class ProcessRunner {
 		ArrayList<TransitGPSData> transitGPS=new ArrayList<TransitGPSData>();
 		ArrayList<TransitGPSData> transitGPSClean=new ArrayList<TransitGPSData>();
 		ArrayList<NodeData> nodeData=new ArrayList<NodeData>();
-		ArrayList<NetworkData> NetData=new ArrayList<NetworkData>();
+		ArrayList<NetworkData> AMNetData=new ArrayList<NetworkData>();
+		ArrayList<NetworkData> MDNetData=new ArrayList<NetworkData>();
 		ArrayList<TransitSurveyAssignmentData> surveyAssignments = new ArrayList<TransitSurveyAssignmentData>();
 		ArrayList<TransitAssignmentLinks> surveyAssignLinks = new ArrayList<TransitAssignmentLinks>();
 		
+		/*
+		 * Read input files
+		 */
 		try{
 			//Read GPS Input Points
 			String[] GPSPointInputFieldMap={"fileeid","pdatime","latit","longit","x","y","n","timesec"};
@@ -57,19 +62,40 @@ public class ProcessRunner {
 			String[] nodeInputFieldMap={"n","x","y"};
 			ArrayList<Object[]> tempNodeData=new ArrayList<Object[]>();
 			tempNodeData=readDBF(config.getProperty("NodeTable"),nodeInputFieldMap);
-			for(Object o[]:tempNodeData)
-				nodeData.add(new NodeData(((Double)o[0]).intValue(),(Float)o[1],(Float)o[2]));
+			for(Object o[]:tempNodeData){
+				Object t[]=new Object[o.length];
+				if(o[0] instanceof Double)
+					t[0]=((Double)o[0]).intValue();
+				else
+					t[0]=((Float)o[0]).intValue();
+				
+				for(int c=1;c<o.length;c++){
+					if(o[c] instanceof Double)
+						t[c]=(Double)o[c];
+					else if(o[c] instanceof Float)
+						t[c]=((Float)o[c]).doubleValue();
+				}
+				nodeData.add(new NodeData((int)t[0],(Double)t[1],(Double)t[2]));
+			}
 			tempNodeData=null;
 			nodeInputFieldMap=null;
 			
-			//Read Network
-			String[] netInputFieldMap={"a","b","admclass","speed","areatype","lanes"};
+			//Read AM Network
+			String[] netInputFieldMap={"a","b","admclass","cspd_1","areatype","lanes"};
 			ArrayList<Object[]> tempNetData=new ArrayList<Object[]>();
-			tempNetData=readDBF(config.getProperty("LinkTable"),netInputFieldMap);
+			tempNetData=readDBF(config.getProperty("AMLinkTable"),netInputFieldMap);
 			for(Object o[]:tempNetData)
-				NetData.add(new NetworkData(((Double)o[0]).intValue(),((Double)o[1]).intValue(),((Float)o[2]).intValue(),(Float)o[3],((Float)o[4]).intValue(),((Float)o[5]).intValue()));
+				AMNetData.add(new NetworkData(((Double)o[0]).intValue(),((Double)o[1]).intValue(),((Double)o[2]).intValue(),(Double)o[3],((Double)o[4]).intValue(),((Double)o[5]).intValue()));
+			tempNetData=null;
+			
+			//Read MD Network
+			tempNetData=new ArrayList<Object[]>();
+			tempNetData=readDBF(config.getProperty("MDLinkTable"),netInputFieldMap);
+			for(Object o[]:tempNetData)
+				MDNetData.add(new NetworkData(((Double)o[0]).intValue(),((Double)o[1]).intValue(),((Double)o[2]).intValue(),(Double)o[3],((Double)o[4]).intValue(),((Double)o[5]).intValue()));
 			tempNetData=null;
 			netInputFieldMap=null;
+			
 		}catch (FileNotFoundException e){
 			System.out.println("FILE NOT FOUND");
 			System.out.println(e.getLocalizedMessage());
@@ -114,82 +140,58 @@ public class ProcessRunner {
 		}
 		System.out.println("Completed reading files");
 		
+		/*
+		 * Distance to N
+		 */
 		Date timeNow=new Date();
 		System.out.println("Starting DistToN at "+timeNow.toString());
-		//Distance to N
 		/*
 		 * Single-core performance - 14sec for 10,000 items
+		 * 3-core performance - 1 sec for 10,000 items
+		 * 3-core performance - 1 sec for 100,000 items
 		 */
-		
-		//FIXME: Error below - can't do this to non-static objects
-		DistToN.nodeData=nodeData;
-		DistToN.transitGPS=transitGPS;
-		
-		new DistToN().run();
-		//nodeData=DistToN.nodeData;
-		//transitGPS=DistToN.transitGPS;
-		//FIXME: This is running really quick (not that I'm that shocked), but it isn't updating the source object.
-		/*
-		for(TransitGPSData tgps:transitGPS){
-			
-			if(transitGPS.indexOf(tgps) % 1000 == 0)
-				System.out.println("Distance to N, Working on "+transitGPS.indexOf(tgps)+" of "+transitGPS.size());
-			for(NodeData nd:nodeData){
-				if(nd.N==tgps.N && !nd.equals(tgps)){
-					tgps.DistToN=Math.sqrt(Math.pow((nd.X-tgps.X),2)+Math.pow((nd.Y-tgps.Y),2));
-				}
-			}
-			
-		}
-		 */
+		new DistToN(transitGPS,nodeData).run();
 		timeNow=new Date();
 		System.out.println("Finishing DistToN at "+timeNow.toString());
-		// Nearest N
 		
-		timeNow=new Date();
-		System.out.println("Starting big thing at "+timeNow.toString());
 		
-		NearestN.transitGPS=transitGPS;
-		
-		new NearestN().run();
 		/*
-		for(TransitGPSData tgps:transitGPS){
-			
-			new NearestN().run();
-			//FIXME: This is double looping!
-			
-			
-		}*/
-		
-		
-		
+		 *  Nearest N
+		 */
+		timeNow=new Date();
+		System.out.println("Starting Nearest-N at "+timeNow.toString());
+		/*
+		 * Single-core performance - 1 second for 10k records
+		 * Less than a second on a quad-core
+		 * Single-core performance - 1:28 for 100k records
+		 * Three-core performance - 0:30 for 100k records
+		 * Three-core performance - 13:57 for all records
+		 * Seven-core performance 64b - 17:58 for all records
+		 */
+		new NearestN(transitGPS).run();
 		timeNow=new Date();
 		System.out.println("Completed Nearest-N operation at "+timeNow.toString());
 		// End Nearest N
+
+		System.out.println("There are "+transitGPS.size()+" records");
 		
-		
-		
-		
-		
-		//Output these to DBF for debugging
-		try {
-			writeDBF("C:\\Modelrun\\TransitTripLengths\\debug.dbf",transitGPS);
-		} catch (IllegalArgumentException | IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (JDBFException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		//Cleanup
+		for(Iterator<TransitGPSData> iter=transitGPS.iterator(); iter.hasNext();){
+			TransitGPSData t=iter.next();
+			if(t.removeMe)
+				iter.remove();
 		}
-		
-		
+		System.out.println("There are "+transitGPS.size()+" records");
 		
 		//TODO: Point on *which* route? Agency Codes?  Crosstowns?
+		//Update Transit GPS with mode
+		timeNow=new Date();
+		System.out.println("Starting linking process at "+timeNow.toString());
+		new TransitModeSearch(transitGPS,surveyAssignLinks,surveyAssignments);
+		timeNow=new Date();
+		System.out.println("Completed linking process at "+timeNow.toString());
 		
-		
-
-		
-
+		//TODO: Output the linked records to check.
 		
 		//FIXME: Remove when debugging is complete (this is the last holding step)
 		int a=1;
@@ -228,8 +230,8 @@ public class ProcessRunner {
 					}
 			}
 			outObj.add(newObject);
-			if(rowCount==10000) //FIXME: For debugging only
-				break;
+			//if(rowCount==100000) //FIXME: For debugging only
+				//break;
 		}
 		return outObj;
 	}
@@ -287,7 +289,15 @@ public class ProcessRunner {
 		return outAL;
 	}	
 
-	//TODO: Document
+	/**
+	 * Writes an object out to a DBF
+	 * @param DBFFileName The file path and name to write the DBF to
+	 * @param objectToWrite The object to write
+	 * @throws IllegalArgumentException
+	 * @throws IllegalAccessException
+	 * @throws IOException
+	 * @throws JDBFException
+	 */
 	static void writeDBF(String DBFFileName, ArrayList<?> objectToWrite) throws IllegalArgumentException, IllegalAccessException, IOException, JDBFException{
 		Object o=objectToWrite.get(0);
 		Class c=o.getClass();

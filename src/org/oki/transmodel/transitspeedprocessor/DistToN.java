@@ -8,21 +8,24 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public class DistToN implements Runnable{
-	public ArrayList<TransitGPSData> transitGPS;
-	public ArrayList<NodeData> nodeData;
+	private ArrayList<TransitGPSData> transitGPS;
+	private ArrayList<NodeData> nodeData;
+	
+	DistToN(ArrayList<TransitGPSData> t, ArrayList<NodeData> n){
+		this.transitGPS=t;
+		this.nodeData=n;
+	}
 	
 	@Override
 	public void run() {
 		List<Future> futuresList = new ArrayList<Future>();
-		int nrOfProcessors=6; //No, I'm not going to totally drill the computer so much so an MP3 can't play and you can't go screw around on Twitter and Reddit!
+		
+		int nrOfProcessors=Runtime.getRuntime().availableProcessors()-1; //No, I'm not going to totally drill the computer so much so an MP3 can't play and you can't go screw around on Twitter and Reddit!
 		ExecutorService eservice = Executors.newFixedThreadPool(nrOfProcessors);
 		//ExecutorService eservice=Executors.newCachedThreadPool();
 		
 		for(TransitGPSData tgps:transitGPS){
-			//FIXME: error below, can't do this with non-static objects
-			DistToNProcess.tgps=tgps;
-			DistToNProcess.nodeData=nodeData;
-			futuresList.add(eservice.submit(new DistToNProcess()));
+			futuresList.add(eservice.submit(new DistToNProcess(tgps,nodeData)));
 		}
 
 		Object taskResult;

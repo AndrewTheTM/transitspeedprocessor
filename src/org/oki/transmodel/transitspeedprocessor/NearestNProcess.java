@@ -4,8 +4,13 @@ import java.util.ArrayList;
 import java.util.concurrent.Callable;
 
 public class NearestNProcess implements Callable {
-	public static ArrayList<TransitGPSData> transitGPS;
-	public static TransitGPSData tgps;
+	private ArrayList<TransitGPSData> transitGPS;
+	private TransitGPSData tgps;
+	
+	NearestNProcess(TransitGPSData t, ArrayList<TransitGPSData> o){
+		this.transitGPS=o;
+		this.tgps=t;
+	}
 
 	@Override
 	public Object call() throws Exception {
