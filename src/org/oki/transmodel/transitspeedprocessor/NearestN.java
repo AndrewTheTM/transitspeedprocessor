@@ -9,7 +9,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public class NearestN implements Runnable {
-	private static ArrayList<TransitGPSData> transitGPS;
+	private ArrayList<TransitGPSData> transitGPS;
 	
 	NearestN(ArrayList<TransitGPSData> t){
 		this.transitGPS=t;
@@ -22,20 +22,12 @@ public class NearestN implements Runnable {
 		ExecutorService eservice = Executors.newFixedThreadPool(nrOfProcessors);
 		//ExecutorService eservice=Executors.newCachedThreadPool();
 		
-		int currentTask=1, tasksToDo=0;
 		for(TransitGPSData tgps:transitGPS){
 			futuresList.add(eservice.submit(new NearestNProcess(tgps,this.transitGPS)));
-			tasksToDo++;
 		}
 		Object taskResult;
 		for(Future future:futuresList){
 			try{
-				//System.out.println("NN Working on "+currentTask+" of "+tasksToDo);
-				//currentTask++;
-				/*
-				 * The two comments above indicate issues with how things work in the new threading world.  The numbers seemed to
-				 * jump around quite a bit. 
-				 */
 				taskResult=future.get();
 			}catch(InterruptedException e){
 				e.printStackTrace();

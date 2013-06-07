@@ -7,24 +7,26 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-public class DistToN implements Runnable{
-	private ArrayList<TransitGPSData> transitGPS;
-	private ArrayList<NodeData> nodeData;
-	
-	DistToN(ArrayList<TransitGPSData> t, ArrayList<NodeData> n){
-		this.transitGPS=t;
-		this.nodeData=n;
+public class NetTimes implements Runnable{
+	private ArrayList<NetworkData> links;
+	private ArrayList<TransitGPSData> tGPS;
+	String timePeriod;
+
+	NetTimes(ArrayList<NetworkData> links,ArrayList<TransitGPSData> tGPS, String t){
+		this.links=links;
+		this.tGPS=tGPS;
+		this.timePeriod=t;
 	}
 	
 	@Override
-	public void run() {
+	public void run(){
 		List<Future> futuresList = new ArrayList<Future>();
 		
 		int nrOfProcessors=Runtime.getRuntime().availableProcessors()-1; //No, I'm not going to totally drill the computer so much so an MP3 can't play and you can't go screw around on Twitter and Reddit!
 		ExecutorService eservice = Executors.newFixedThreadPool(nrOfProcessors);
 		
-		for(TransitGPSData tgps:transitGPS){
-			futuresList.add(eservice.submit(new DistToNProcess(tgps,nodeData)));
+		for(NetworkData link:links){
+			futuresList.add(eservice.submit(new NetTimesProcess(link,tGPS,timePeriod)));
 		}
 
 		Object taskResult;
@@ -39,13 +41,5 @@ public class DistToN implements Runnable{
 				eservice.shutdown();
 			}
 		}
-	}
-	
-	public void setTransitGPS(ArrayList<TransitGPSData> o){
-		transitGPS=o;
-	}
-	
-	public void setNodeData(ArrayList<NodeData> o){
-		nodeData=o;
 	}
 }

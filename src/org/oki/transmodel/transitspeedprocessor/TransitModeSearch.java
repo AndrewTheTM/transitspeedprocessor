@@ -10,9 +10,9 @@ import java.util.concurrent.Future;
 
 
 public class TransitModeSearch implements Runnable{
-	private static ArrayList<TransitGPSData> transitGPS;
-	private static ArrayList<TransitAssignmentLinks> tALinks;
-	private static ArrayList<TransitSurveyAssignmentData> tsad;
+	private ArrayList<TransitGPSData> transitGPS;
+	private ArrayList<TransitAssignmentLinks> tALinks;
+	private ArrayList<TransitSurveyAssignmentData> tsad;
 	
 	
 	TransitModeSearch(ArrayList<TransitGPSData> transitGPS,ArrayList<TransitAssignmentLinks> tALinks,ArrayList<TransitSurveyAssignmentData> tsad){
